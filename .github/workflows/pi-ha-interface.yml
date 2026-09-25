@@ -1,0 +1,27 @@
+name: pi-ha-interface
+
+on:
+  push:
+    paths: ["pi-ha-interface/**", ".github/workflows/pi-ha-interface.yml"]
+  pull_request:
+    paths: ["pi-ha-interface/**", ".github/workflows/pi-ha-interface.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11" # Raspberry Pi OS Bookworm ships 3.11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Python tests
+        run: python -m unittest discover -s pi-ha-interface/tests -v
+      - name: JS syntax check
+        run: node --check pi-ha-interface/static/app.js
+      - name: Shell syntax check
+        run: |
+          sh -n pi-ha-interface/install.sh
+          sh -n pi-ha-interface/kiosk.sh
