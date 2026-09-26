@@ -34,6 +34,9 @@
   let msgId = 0;
   const pending = new Map(); // id -> { resolve, reject }
   let retryDelay = 1000;
+  // While the initial get_states is in flight, state_changed events are also
+  // recorded here so they can be replayed over the (older) snapshot.
+  let eventsDuringSnapshot = null;
 
   /* ---------- UI ---------- */
 
@@ -259,9 +262,16 @@
     if (s.attributes.max_temp != null) next = Math.min(s.attributes.max_temp, next);
     next = Math.round(next * 10) / 10;
     // Optimistic update so repeated taps accumulate before HA echoes back.
+    const previous = s.attributes.temperature;
     s.attributes.temperature = next;
     render(entityId);
-    callService("climate", "set_temperature", entityId, { temperature: next });
+    callService("climate", "set_temperature", entityId, { temperature: next }).catch(() => {
+      // Roll back unless a newer tap or state update has replaced the value.
+      if (states.get(entityId) === s && s.attributes.temperature === next) {
+        s.attributes.temperature = previous;
+        render(entityId);
+      }
+    });
   }
 
   /* ---------- WebSocket ---------- */
@@ -338,6 +348,7 @@
       case "event": {
         const data = msg.event && msg.event.data;
         if (!data || !tiles.has(data.entity_id)) return;
+        if (eventsDuringSnapshot) eventsDuringSnapshot.set(data.entity_id, data.new_state);
         if (data.new_state) states.set(data.entity_id, data.new_state);
         else states.delete(data.entity_id);
         render(data.entity_id);
@@ -350,13 +361,23 @@
     try {
       // Subscribe first so no change slips between the snapshot and the stream.
       await send({ type: "subscribe_events", event_type: "state_changed" });
+      eventsDuringSnapshot = new Map();
       const all = await send({ type: "get_states" });
+      // Rebuild from the snapshot so entities removed from HA don't linger
+      // across reconnects, then replay anything newer than the snapshot.
+      states.clear();
       for (const s of all) if (tiles.has(s.entity_id)) states.set(s.entity_id, s);
+      for (const [id, s] of eventsDuringSnapshot) {
+        if (s) states.set(id, s);
+        else states.delete(id);
+      }
       renderAll();
       const missing = [...tiles.keys()].filter((id) => !states.has(id));
       if (missing.length) toast("Not found in HA: " + missing.join(", "));
     } catch (err) {
       showError("Failed to load states: " + err.message);
+    } finally {
+      eventsDuringSnapshot = null;
     }
   }
 

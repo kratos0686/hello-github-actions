@@ -6,11 +6,9 @@ set -eu
 URL="${HA_DASH_URL:-http://127.0.0.1:8080/}"
 BROWSER="$(command -v chromium || command -v chromium-browser)"
 
-# Wait for the local dashboard server so the first paint isn't an error page.
-for _ in $(seq 1 30); do
-  if python3 -c "import urllib.request,sys; urllib.request.urlopen(sys.argv[1], timeout=1)" "$URL" 2>/dev/null; then
-    break
-  fi
+# Wait for the local dashboard server so the first paint isn't an error page
+# (Chromium would never retry it on its own).
+until python3 -c "import urllib.request,sys; urllib.request.urlopen(sys.argv[1], timeout=1)" "$URL" 2>/dev/null; do
   sleep 1
 done
 

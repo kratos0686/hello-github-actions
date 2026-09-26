@@ -9,7 +9,7 @@ only a thin client on the Pi:
 
 ```
 ┌──────────── Pi Zero 2W ─────────────┐          ┌──── Home Assistant ────┐
-│ cage + Chromium (kiosk, tty1)       │  ws://   │                        │
+│ cage + Chromium (kiosk, tty1)       │ WebSocket│                        │
 │   └─ dashboard (static HTML/JS) ────┼─────────►│  /api/websocket        │
 │ server.py (127.0.0.1:8080)          │          │                        │
 │   └─ serves page + config.js        │          └────────────────────────┘

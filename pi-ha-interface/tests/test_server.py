@@ -47,6 +47,19 @@ class LoadConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(server.ConfigError, r"tiles\[0\]"):
             server.load_config(path)
 
+    def test_wrong_types(self):
+        cases = [
+            (["not", "an", "object"], "JSON object"),
+            ({"ha_url": 8123, "token": "x"}, "ha_url must be a string"),
+            ({"ha_url": "http://h", "token": ["x"]}, "token must be a string"),
+            ({"ha_url": "http://h", "token": "x", "tiles": [{"entity": 42}]}, r"tiles\[0\]"),
+            ({"ha_url": "http://h", "token": "x", "tiles": [7]}, r"tiles\[0\]"),
+        ]
+        for data, message in cases:
+            with self.subTest(data=data):
+                with self.assertRaisesRegex(server.ConfigError, message):
+                    server.load_config(write_config(data))
+
     def test_missing_file(self):
         with self.assertRaisesRegex(server.ConfigError, "not found"):
             server.load_config("/nonexistent/config.json")

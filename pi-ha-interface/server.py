@@ -37,9 +37,15 @@ def load_config(path):
     except json.JSONDecodeError as e:
         raise ConfigError(f"invalid JSON in {path}: {e}")
 
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{path} must contain a JSON object")
+
     missing = [k for k in REQUIRED_KEYS if not raw.get(k)]
     if missing:
         raise ConfigError(f"missing required config keys: {', '.join(missing)}")
+    for key in REQUIRED_KEYS:
+        if not isinstance(raw[key], str):
+            raise ConfigError(f"{key} must be a string")
 
     ha_url = raw["ha_url"].rstrip("/")
     if not ha_url.startswith(("http://", "https://")):
@@ -51,7 +57,8 @@ def load_config(path):
     for i, tile in enumerate(tiles):
         if isinstance(tile, str):
             tiles[i] = tile = {"entity": tile}
-        if not isinstance(tile, dict) or "." not in str(tile.get("entity", "")):
+        entity = tile.get("entity") if isinstance(tile, dict) else None
+        if not isinstance(entity, str) or "." not in entity:
             raise ConfigError(f"tiles[{i}] needs an 'entity' like 'light.kitchen'")
 
     return {
