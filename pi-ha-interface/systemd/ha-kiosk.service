@@ -1,6 +1,6 @@
 [Unit]
 Description=Home Assistant dashboard kiosk (cage + Chromium on tty1)
-After=systemd-user-sessions.service plymouth-quit-wait.service ha-dashboard.service
+After=systemd-user-sessions.service plymouth-quit-wait.service ha-dashboard.service getty@tty1.service
 Wants=ha-dashboard.service
 Conflicts=getty@tty1.service
 

@@ -1,13 +1,21 @@
 /* Lightweight Home Assistant dashboard for a Raspberry Pi Zero 2W kiosk.
  * Talks to Home Assistant directly over its WebSocket API. No dependencies. */
-(function () {
+(async function () {
   "use strict";
 
-  const cfg = window.HA_CONFIG;
   const $ = (id) => document.getElementById(id);
 
-  if (!cfg) {
-    showError(window.HA_CONFIG_ERROR || "config.js failed to load");
+  let cfg;
+  try {
+    const res = await fetch("config.json", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    cfg = await res.json();
+  } catch (err) {
+    showError("Could not load config.json: " + err.message);
+    return;
+  }
+  if (cfg.error) {
+    showError(cfg.error);
     return;
   }
 
@@ -103,7 +111,8 @@
         parts.slider.setAttribute("aria-label", "Brightness");
         stopTap(parts.slider);
         parts.slider.addEventListener("change", () => {
-          callService("light", "turn_on", tile.entity, { brightness_pct: Number(parts.slider.value) });
+          // callService already shows a toast on failure.
+          callService("light", "turn_on", tile.entity, { brightness_pct: Number(parts.slider.value) }).catch(() => {});
         });
         root.append(parts.slider);
       }

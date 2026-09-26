@@ -12,7 +12,7 @@ only a thin client on the Pi:
 │ cage + Chromium (kiosk, tty1)       │ WebSocket│                        │
 │   └─ dashboard (static HTML/JS) ────┼─────────►│  /api/websocket        │
 │ server.py (127.0.0.1:8080)          │          │                        │
-│   └─ serves page + config.js        │          └────────────────────────┘
+│   └─ serves page + config.json      │          └────────────────────────┘
 └─────────────────────────────────────┘
 ```
 
@@ -84,7 +84,7 @@ page. On the kiosk you can do that with `sudo systemctl restart ha-kiosk`.
 ```sh
 journalctl -u ha-dashboard -f   # web server
 journalctl -u ha-kiosk -f       # browser / compositor
-curl http://127.0.0.1:8080/config.js
+curl http://127.0.0.1:8080/config.json
 ```
 
 - **Red dot in the header**: the page can't reach Home Assistant. Check `ha_url` from the Pi.

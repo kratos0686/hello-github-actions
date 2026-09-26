@@ -3,6 +3,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -89,20 +90,38 @@ class HandlerTests(unittest.TestCase):
         self.addCleanup(httpd.shutdown)
         return f"http://127.0.0.1:{httpd.server_address[1]}"
 
-    def test_config_js_and_static(self):
+    def get(self, url, **headers):
+        return urllib.request.urlopen(urllib.request.Request(url, headers=headers))
+
+    def test_config_json_and_static(self):
         base = self.serve(write_config({"ha_url": "http://h:8123", "token": "tok"}))
-        with urllib.request.urlopen(base + "/config.js") as r:
-            body = r.read().decode()
+        with self.get(base + "/config.json", **{"Sec-Fetch-Site": "same-origin"}) as r:
+            body = json.load(r)
             self.assertEqual(r.headers["Cache-Control"], "no-store")
-        self.assertTrue(body.startswith("window.HA_CONFIG = "))
-        self.assertIn('"token": "tok"', body)
+            self.assertTrue(r.headers["Content-Type"].startswith("application/json"))
+        self.assertEqual(body["token"], "tok")
         with urllib.request.urlopen(base + "/") as r:
             self.assertIn(b"app.js", r.read())
 
     def test_config_error_is_reported_to_page(self):
         base = self.serve("/nonexistent/config.json")
-        with urllib.request.urlopen(base + "/config.js") as r:
-            self.assertIn("HA_CONFIG_ERROR", r.read().decode())
+        with self.get(base + "/config.json") as r:
+            self.assertIn("not found", json.load(r)["error"])
+
+    def test_config_refused_to_other_sites(self):
+        base = self.serve(write_config({"ha_url": "http://h:8123", "token": "tok"}))
+        for headers in ({"Sec-Fetch-Site": "cross-site"},     # <script src> from another site
+                        {"Sec-Fetch-Site": "same-site"},
+                        {"Host": "attacker.example:8080"}):  # DNS rebinding
+            with self.subTest(headers=headers):
+                with self.assertRaises(urllib.error.HTTPError) as ctx:
+                    self.get(base + "/config.json", **headers)
+                self.assertEqual(ctx.exception.code, 403)
+
+    def test_host_name(self):
+        self.assertEqual(server._host_name("127.0.0.1:8080"), "127.0.0.1")
+        self.assertEqual(server._host_name("[::1]:8080"), "::1")
+        self.assertEqual(server._host_name("LocalHost"), "localhost")
 
 
 if __name__ == "__main__":

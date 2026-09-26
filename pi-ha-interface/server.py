@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Tiny, dependency-free web server for the Pi Zero 2W Home Assistant dashboard.
 
-Serves the static dashboard and a generated ``/config.js`` containing the
-Home Assistant URL, access token and tile layout from ``config.json``.
+Serves the static dashboard and ``/config.json`` containing the Home Assistant
+URL, access token and tile layout from the config file.
 
 Because the token is handed to the browser, the server binds to 127.0.0.1 by
-default so only the kiosk browser running on the Pi itself can read it.
+default so only the kiosk browser running on the Pi itself can read it. The
+config is served as JSON (not script) and only to same-origin requests, so other
+web pages open in that browser cannot load it cross-origin.
 """
 
 import argparse
@@ -21,6 +23,8 @@ STATIC_DIR = BASE_DIR / "static"
 DEFAULT_CONFIG = BASE_DIR / "config.json"
 
 REQUIRED_KEYS = ("ha_url", "token")
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
+VERBOSE = bool(os.environ.get("HA_DASH_VERBOSE"))
 
 
 class ConfigError(Exception):
@@ -70,27 +74,45 @@ def load_config(path):
     }
 
 
-def make_handler(config_path):
+def _host_name(host_header):
+    """Hostname part of a Host header ("[::1]:8080" -> "::1")."""
+    host = (host_header or "").strip().lower()
+    if host.startswith("["):
+        return host[1:].split("]", 1)[0]
+    return host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+
+
+def make_handler(config_path, loopback_only=True):
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
         def do_GET(self):
-            if self.path.split("?", 1)[0] == "/config.js":
+            if self.path.split("?", 1)[0] == "/config.json":
                 return self._send_config()
             return super().do_GET()
 
+        def _config_request_allowed(self):
+            # Browsers label cross-origin subresource requests; refuse them so a
+            # page from another site can't pull the token.
+            if self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
+                return False
+            # A DNS-rebinding page would reach us under its own hostname.
+            if loopback_only and _host_name(self.headers.get("Host")) not in LOOPBACK_HOSTS:
+                return False
+            return True
+
         def _send_config(self):
+            if not self._config_request_allowed():
+                return self.send_error(HTTPStatus.FORBIDDEN)
             # Re-read on every request so config edits apply on page reload.
             try:
-                body = "window.HA_CONFIG = " + json.dumps(load_config(config_path)) + ";\n"
-                status = HTTPStatus.OK
+                body = load_config(config_path)
             except ConfigError as e:
-                body = "window.HA_CONFIG_ERROR = " + json.dumps(str(e)) + ";\n"
-                status = HTTPStatus.OK  # let the page render the error
-            data = body.encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/javascript; charset=utf-8")
+                body = {"error": str(e)}  # 200 so the page can render the error
+            data = json.dumps(body).encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
@@ -100,9 +122,10 @@ def make_handler(config_path):
             self.send_header("X-Content-Type-Options", "nosniff")
             super().end_headers()
 
-        def log_message(self, fmt, *args):
-            if os.environ.get("HA_DASH_VERBOSE"):
-                super().log_message(fmt, *args)
+        def log_request(self, code="-", size="-"):
+            # Errors always reach the journal; successful requests only when verbose.
+            if VERBOSE or (isinstance(code, int) and code >= 400):
+                super().log_request(code, size)
 
     return Handler
 
@@ -119,14 +142,15 @@ def main(argv=None):
     except ConfigError as e:
         print(f"warning: {e}", file=sys.stderr)
 
-    if args.host not in ("127.0.0.1", "localhost", "::1"):
+    loopback_only = args.host in LOOPBACK_HOSTS
+    if not loopback_only:
         print(
             "warning: listening on a non-loopback address exposes your Home Assistant "
             "token to anyone who can reach this port",
             file=sys.stderr,
         )
 
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(args.config))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(args.config, loopback_only))
     print(f"HA dashboard on http://{args.host}:{args.port}/", file=sys.stderr)
     try:
         server.serve_forever()
