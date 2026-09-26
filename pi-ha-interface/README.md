@@ -42,7 +42,8 @@ only a thin client on the Pi:
    sudo reboot
    ```
 
-The dashboard starts full-screen on the attached display after boot.
+With the default install, the dashboard starts full-screen on the attached
+display after boot. `--no-kiosk` installs only the dashboard server.
 
 ## Configuration
 
@@ -50,7 +51,7 @@ The dashboard starts full-screen on the attached display after boot.
 
 | key      | description                                                                 |
 |----------|-----------------------------------------------------------------------------|
-| `ha_url` | Base URL of Home Assistant, e.g. `http://homeassistant.local:8123`           |
+| `ha_url` | Base URL of Home Assistant, e.g. `https://homeassistant.local:8123` (see below) |
 | `token`  | Long-lived access token                                                      |
 | `title`  | Header text                                                                  |
 | `theme`  | `auto`, `light` or `dark`                                                    |
@@ -66,11 +67,17 @@ page. On the kiosk you can do that with `sudo systemctl restart ha-kiosk`.
 - **Memory**: Chromium is the heaviest part. The kiosk flags already limit it to
   one renderer and a minimal cache. If you still run short, enable zram:
   `sudo apt-get install -y zram-tools`.
-- **HTTPS Home Assistant**: if `ha_url` is `https://`, the page connects with
-  `wss://` automatically.
-- **Using a tablet or phone instead of a screen on the Pi**: run
-  `server.py --host 0.0.0.0`. Be aware that this exposes the access token to
-  anyone on your network who can reach the port.
+- **Use HTTPS for Home Assistant**: the access token is sent over the
+  WebSocket connection. With an `https://` `ha_url` the page connects with
+  `wss://` (encrypted). A plain `http://` URL also works, but then the token
+  crosses your network unencrypted, so only do that on a network you trust.
+  Enable TLS in Home Assistant (for example with its Let's Encrypt or NGINX
+  add-ons) to use `https://`.
+- **Using a tablet or phone instead of a screen on the Pi**: edit
+  `/etc/systemd/system/ha-dashboard.service`, change `--host 127.0.0.1` to
+  `--host 0.0.0.0`, then run `sudo systemctl daemon-reload && sudo systemctl
+  restart ha-dashboard` and open `http://<pi-address>:8080/`. Be aware that this
+  exposes the access token to anyone on your network who can reach the port.
 
 ## Troubleshooting
 

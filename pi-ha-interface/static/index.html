@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Home Dashboard</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -14,9 +14,9 @@
       <span id="conn" class="conn conn-connecting" title="Connecting…"></span>
     </div>
   </header>
-  <main id="grid" class="grid" aria-live="polite"></main>
-  <div id="error" class="error" hidden></div>
-  <div id="toast" class="toast" hidden></div>
+  <main id="grid" class="grid"></main>
+  <div id="error" class="error" role="alert" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

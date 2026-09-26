@@ -14,7 +14,16 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-RUN_USER="${SUDO_USER:-pi}"
+# The service runs as the (non-root) user who invoked sudo, or HA_DASH_USER.
+RUN_USER="${HA_DASH_USER:-${SUDO_USER:-}}"
+if [ -z "$RUN_USER" ] || [ "$RUN_USER" = "root" ]; then
+  echo "run as your normal user via sudo, or set HA_DASH_USER=<user>" >&2
+  exit 1
+fi
+if ! id "$RUN_USER" >/dev/null 2>&1; then
+  echo "user '$RUN_USER' does not exist" >&2
+  exit 1
+fi
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTALL_DIR="/opt/ha-dashboard"
 
@@ -38,7 +47,9 @@ install_unit() {
 
 install_unit ha-dashboard.service
 systemctl daemon-reload
-systemctl enable --now ha-dashboard.service
+systemctl enable ha-dashboard.service
+# Restart (not just start) so a re-run picks up the newly copied files.
+systemctl restart ha-dashboard.service
 
 if [ "$KIOSK" -eq 1 ]; then
   echo "==> Installing kiosk packages (cage, chromium)"

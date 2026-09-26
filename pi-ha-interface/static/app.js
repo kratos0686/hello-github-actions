@@ -129,6 +129,8 @@
         root.tabIndex = 0;
         root.addEventListener("click", () => onTap(tile, root));
         root.addEventListener("keydown", (e) => {
+          // Ignore keys from inner controls (e.g. the brightness slider).
+          if (e.target !== root) return;
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onTap(tile, root); }
         });
       }
@@ -220,7 +222,11 @@
     const entityId = tile.entity;
     const domain = entityId.split(".")[0];
     const s = states.get(entityId);
-    if (!s || s.state === "unavailable") { toast("Unavailable"); return; }
+    const stateless = domain === "scene" || domain === "button";
+    if (!s || s.state === "unavailable" || (s.state === "unknown" && !stateless)) {
+      toast("Unavailable");
+      return;
+    }
 
     if (CONFIRM_DOMAINS.has(domain) && !root.classList.contains("confirm")) {
       root.classList.add("confirm");

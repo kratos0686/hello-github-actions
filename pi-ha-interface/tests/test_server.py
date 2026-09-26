@@ -12,8 +12,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import server  # noqa: E402
 
 
+_tmpdir = None
+
+
+def setUpModule():
+    global _tmpdir
+    _tmpdir = tempfile.TemporaryDirectory()
+
+
+def tearDownModule():
+    _tmpdir.cleanup()
+
+
 def write_config(data):
-    f = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+    f = tempfile.NamedTemporaryFile("w", suffix=".json", dir=_tmpdir.name, delete=False)
     json.dump(data, f)
     f.close()
     return f.name
