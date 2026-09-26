@@ -48,19 +48,18 @@
 
   /* ---------- UI ---------- */
 
+  // The error/toast live regions stay rendered (CSS collapses them when empty)
+  // so screen readers announce text as it is inserted.
   function showError(msg) {
-    const el = $("error");
-    el.textContent = msg;
-    el.hidden = !msg;
+    $("error").textContent = msg || "";
   }
 
   let toastTimer = null;
   function toast(msg) {
     const el = $("toast");
     el.textContent = msg;
-    el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.hidden = true; }, 2500);
+    toastTimer = setTimeout(() => { el.textContent = ""; }, 2500);
   }
 
   function setConn(status, label) {
