@@ -276,13 +276,16 @@
     if (s.attributes.max_temp != null) next = Math.min(s.attributes.max_temp, next);
     next = Math.round(next * 10) / 10;
     // Optimistic update so repeated taps accumulate before HA echoes back.
-    const previous = s.attributes.temperature;
+    // A state update from HA replaces `s`, so the confirmed value is the one
+    // this object held before its first optimistic change.
+    if (!("confirmedTemp" in s)) s.confirmedTemp = s.attributes.temperature;
+    const version = (s.tempVersion = (s.tempVersion || 0) + 1);
     s.attributes.temperature = next;
     render(entityId);
     callService("climate", "set_temperature", entityId, { temperature: next }).catch(() => {
-      // Roll back unless a newer tap or state update has replaced the value.
-      if (states.get(entityId) === s && s.attributes.temperature === next) {
-        s.attributes.temperature = previous;
+      // Only the latest tap decides; roll back to HA's last confirmed value.
+      if (states.get(entityId) === s && s.tempVersion === version) {
+        s.attributes.temperature = s.confirmedTemp;
         render(entityId);
       }
     });

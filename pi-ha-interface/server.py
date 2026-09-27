@@ -40,6 +40,8 @@ def load_config(path):
         raise ConfigError(f"config file not found: {path} (copy config.example.json)")
     except json.JSONDecodeError as e:
         raise ConfigError(f"invalid JSON in {path}: {e}")
+    except (OSError, UnicodeDecodeError) as e:
+        raise ConfigError(f"unable to read config {path}: {e}")
 
     if not isinstance(raw, dict):
         raise ConfigError(f"{path} must contain a JSON object")

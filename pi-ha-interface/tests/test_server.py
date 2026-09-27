@@ -77,6 +77,15 @@ class LoadConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(server.ConfigError, "not found"):
             server.load_config("/nonexistent/config.json")
 
+    def test_unreadable_file(self):
+        with self.assertRaisesRegex(server.ConfigError, "unable to read"):
+            server.load_config(_tmpdir.name)  # a directory: IsADirectoryError
+        path = write_config({})
+        with open(path, "wb") as f:
+            f.write(b'{"ha_url": "\xff"}')
+        with self.assertRaisesRegex(server.ConfigError, "unable to read"):
+            server.load_config(path)
+
     def test_example_config_is_valid(self):
         cfg = server.load_config(Path(server.BASE_DIR) / "config.example.json")
         self.assertTrue(cfg["tiles"])
