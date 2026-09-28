@@ -43,7 +43,9 @@ only a thin client on the Pi:
    ```
 
 With the default install, the dashboard starts full-screen on the attached
-display after boot. `--no-kiosk` installs only the dashboard server.
+display after boot. `--no-kiosk` installs only the dashboard server (and turns
+off the kiosk if an earlier install set it up). Re-running the installer applies
+updated files and restarts both services.
 
 ## Configuration
 

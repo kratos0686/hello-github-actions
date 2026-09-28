@@ -42,6 +42,7 @@
   let msgId = 0;
   const pending = new Map(); // id -> { resolve, reject }
   let retryDelay = 1000;
+  let authFailed = false;
   // While the initial get_states is in flight, state_changed events are also
   // recorded here so they can be replayed over the (older) snapshot.
   let eventsDuringSnapshot = null;
@@ -66,6 +67,8 @@
     const el = $("conn");
     el.className = "conn conn-" + status;
     el.title = label;
+    const text = $("conn-text");
+    if (text.textContent !== label) text.textContent = label;
   }
 
   function tickClock() {
@@ -193,6 +196,9 @@
     root.classList.remove("pending");
     root.classList.toggle("unavailable", unavailable);
     root.classList.toggle("on", !!s && ON_STATES.has(s.state));
+    if (TOGGLE_DOMAINS.has(tile.entity.split(".")[0])) {
+      root.setAttribute("aria-pressed", String(!!s && ON_STATES.has(s.state)));
+    }
 
     if (!tile.name && s && s.attributes.friendly_name) parts.name.textContent = s.attributes.friendly_name;
 
@@ -224,7 +230,7 @@
 
   /* ---------- Actions ---------- */
 
-  const confirmTimers = new WeakMap();
+  const confirmations = new WeakMap(); // tile element -> { timer, service }
 
   function onTap(tile, root) {
     const entityId = tile.entity;
@@ -236,23 +242,24 @@
       return;
     }
 
-    if (CONFIRM_DOMAINS.has(domain) && !root.classList.contains("confirm")) {
-      root.classList.add("confirm");
-      toast("Tap again to " + describeAction(domain, s.state));
-      confirmTimers.set(root, setTimeout(() => root.classList.remove("confirm"), 3000));
-      return;
-    }
-    clearTimeout(confirmTimers.get(root));
-    root.classList.remove("confirm");
-
-    let service;
-    switch (domain) {
-      case "lock": service = s.state === "locked" ? "unlock" : "lock"; break;
-      case "cover": service = s.state === "closed" || s.state === "closing" ? "open_cover" : "close_cover"; break;
-      case "scene": case "script": service = "turn_on"; break;
-      case "button": service = "press"; break;
-      case "media_player": service = "media_play_pause"; break;
-      default: service = "toggle";
+    let service = serviceFor(domain, s.state);
+    if (CONFIRM_DOMAINS.has(domain)) {
+      const pendingConfirm = confirmations.get(root);
+      if (!pendingConfirm) {
+        root.classList.add("confirm");
+        toast("Tap again to " + describeAction(service));
+        const timer = setTimeout(() => {
+          confirmations.delete(root);
+          root.classList.remove("confirm");
+        }, 3000);
+        confirmations.set(root, { timer, service });
+        return;
+      }
+      // Run exactly what the prompt offered, even if the state changed since.
+      service = pendingConfirm.service;
+      clearTimeout(pendingConfirm.timer);
+      confirmations.delete(root);
+      root.classList.remove("confirm");
     }
     root.classList.add("pending");
     callService(domain, service, entityId).then(() => {
@@ -262,9 +269,19 @@
     }, () => {}).finally(() => root.classList.remove("pending"));
   }
 
-  function describeAction(domain, state) {
-    if (domain === "lock") return state === "locked" ? "unlock" : "lock";
-    return state === "closed" || state === "closing" ? "open" : "close";
+  function serviceFor(domain, state) {
+    switch (domain) {
+      case "lock": return state === "locked" ? "unlock" : "lock";
+      case "cover": return state === "closed" || state === "closing" ? "open_cover" : "close_cover";
+      case "scene": case "script": return "turn_on";
+      case "button": return "press";
+      case "media_player": return "media_play_pause";
+      default: return "toggle";
+    }
+  }
+
+  function describeAction(service) {
+    return { open_cover: "open", close_cover: "close" }[service] || service;
   }
 
   function nudgeTemperature(entityId, dir) {
@@ -333,6 +350,8 @@
     ws.onclose = () => {
       for (const p of pending.values()) p.reject(new Error("connection lost"));
       pending.clear();
+      // Retrying a rejected token can't succeed; reload the page after fixing it.
+      if (authFailed) return;
       setConn("down", "Disconnected — retrying");
       setTimeout(connect, retryDelay);
       retryDelay = Math.min(retryDelay * 2, 30000);
@@ -345,7 +364,9 @@
         ws.send(JSON.stringify({ type: "auth", access_token: cfg.token }));
         return;
       case "auth_invalid":
-        showError("Home Assistant rejected the access token: " + (msg.message || ""));
+        authFailed = true;
+        showError("Home Assistant rejected the access token: " + (msg.message || "") +
+          ". Fix the token in config.json, then reload.");
         setConn("down", "Auth failed");
         return;
       case "auth_ok":

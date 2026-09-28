@@ -1,4 +1,5 @@
 import json
+import socket
 import sys
 import tempfile
 import threading
@@ -126,6 +127,20 @@ class HandlerTests(unittest.TestCase):
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
                     self.get(base + "/config.json", **headers)
                 self.assertEqual(ctx.exception.code, 403)
+
+    def test_ipv6_loopback(self):
+        try:
+            with socket.socket(socket.AF_INET6) as probe:
+                probe.bind(("::1", 0))
+        except OSError:
+            self.skipTest("IPv6 not available")
+        httpd = server.make_server("::1", 0, server.make_handler(write_config({"ha_url": "http://h", "token": "t"})))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        port = httpd.server_address[1]
+        with self.get(f"http://[::1]:{port}/config.json", **{"Sec-Fetch-Site": "same-origin"}) as r:
+            self.assertEqual(json.load(r)["token"], "t")
 
     def test_host_name(self):
         self.assertEqual(server._host_name("127.0.0.1:8080"), "127.0.0.1")

@@ -13,6 +13,7 @@ web pages open in that browser cannot load it cross-origin.
 import argparse
 import json
 import os
+import socket
 import sys
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -132,6 +133,14 @@ def make_handler(config_path, loopback_only=True):
     return Handler
 
 
+def make_server(host, port, handler):
+    """Create the HTTP server, using an IPv6 socket for IPv6 hosts such as ::1."""
+    class Server(ThreadingHTTPServer):
+        address_family = socket.AF_INET6 if ":" in host else socket.AF_INET
+
+    return Server((host, port), handler)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--host", default=os.environ.get("HA_DASH_HOST", "127.0.0.1"))
@@ -152,8 +161,9 @@ def main(argv=None):
             file=sys.stderr,
         )
 
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(args.config, loopback_only))
-    print(f"HA dashboard on http://{args.host}:{args.port}/", file=sys.stderr)
+    server = make_server(args.host, args.port, make_handler(args.config, loopback_only))
+    shown = f"[{args.host}]" if ":" in args.host else args.host
+    print(f"HA dashboard on http://{shown}:{args.port}/", file=sys.stderr)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

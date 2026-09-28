@@ -6,6 +6,10 @@
 #   sudo ./install.sh --no-kiosk # dashboard server only
 set -eu
 
+if [ "$#" -gt 1 ] || { [ "$#" -eq 1 ] && [ "$1" != "--no-kiosk" ]; }; then
+  echo "usage: $0 [--no-kiosk]" >&2
+  exit 2
+fi
 KIOSK=1
 [ "${1:-}" = "--no-kiosk" ] && KIOSK=0
 
@@ -52,11 +56,15 @@ systemctl enable ha-dashboard.service
 systemctl restart ha-dashboard.service
 
 if [ "$KIOSK" -eq 1 ]; then
-  echo "==> Installing kiosk packages (cage, chromium)"
-  apt-get update
-  apt-get install -y --no-install-recommends cage
-  apt-get install -y --no-install-recommends chromium || \
-    apt-get install -y --no-install-recommends chromium-browser
+  # Only touch apt when something is missing, so a re-run works offline.
+  if ! command -v cage >/dev/null 2>&1 || \
+     ! { command -v chromium || command -v chromium-browser; } >/dev/null 2>&1; then
+    echo "==> Installing kiosk packages (cage, chromium)"
+    apt-get update
+    apt-get install -y --no-install-recommends cage
+    apt-get install -y --no-install-recommends chromium || \
+      apt-get install -y --no-install-recommends chromium-browser
+  fi
   # Give the user access to the display, input and GPU devices.
   usermod -aG video,render,input,tty "$RUN_USER"
 
@@ -65,7 +73,22 @@ if [ "$KIOSK" -eq 1 ]; then
   systemctl set-default graphical.target
   systemctl disable getty@tty1.service || true
   systemctl enable ha-kiosk.service
-  echo "==> Kiosk enabled on tty1 - reboot to start it"
+  if systemctl is-active --quiet ha-kiosk.service; then
+    # Already running from an earlier install: reload the new files now.
+    systemctl restart ha-kiosk.service
+    echo "==> Kiosk restarted"
+  else
+    echo "==> Kiosk enabled on tty1 - reboot to start it"
+  fi
+elif [ -f /etc/systemd/system/ha-kiosk.service ]; then
+  # Switching an existing kiosk install to server-only: undo the kiosk setup.
+  echo "==> Disabling the kiosk from an earlier install"
+  systemctl disable --now ha-kiosk.service || true
+  rm -f /etc/systemd/system/ha-kiosk.service
+  systemctl daemon-reload
+  systemctl enable getty@tty1.service || true
+  systemctl start getty@tty1.service || true
+  systemctl set-default multi-user.target
 fi
 
 echo "==> Done. Dashboard: http://127.0.0.1:8080/ (logs: journalctl -u ha-dashboard -f)"
