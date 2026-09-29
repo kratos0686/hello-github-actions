@@ -57,7 +57,7 @@ class LoadConfigTests(unittest.TestCase):
             server.load_config(path)
 
     def test_malformed_urls(self):
-        for url in ("http://", "https://?x", "https://:8123", "http://h:notaport",
+        for url in ("http://", "https://?x", "https://:8123", "http://h:notaport", "http://[",
                     "ws://h:8123", "http://h:8123/?a=1", "http://h:8123/#x"):
             with self.subTest(url=url):
                 with self.assertRaisesRegex(server.ConfigError, "ha_url"):

@@ -56,8 +56,8 @@ def load_config(path):
             raise ConfigError(f"{key} must be a string")
 
     ha_url = raw["ha_url"].strip().rstrip("/")
-    parts = urlsplit(ha_url)
     try:
+        parts = urlsplit(ha_url)  # raises ValueError for e.g. "http://["
         parts.port  # raises ValueError for a malformed port
     except ValueError:
         parts = None
