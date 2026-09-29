@@ -93,6 +93,22 @@ h1 { margin: 0; font-size: 1.4rem; font-weight: 600; }
 }
 
 .tile.actionable { cursor: pointer; }
+.tile-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: inherit;
+}
+.tile-main:focus-visible { outline: 3px solid var(--accent); outline-offset: 6px; border-radius: 8px; }
 .tile.actionable:active { transform: scale(0.97); }
 .tile.on { background: var(--card-on); }
 .tile.unavailable { opacity: 0.45; }

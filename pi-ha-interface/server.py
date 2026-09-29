@@ -18,6 +18,7 @@ import sys
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -54,19 +55,31 @@ def load_config(path):
         if not isinstance(raw[key], str):
             raise ConfigError(f"{key} must be a string")
 
-    ha_url = raw["ha_url"].rstrip("/")
-    if not ha_url.startswith(("http://", "https://")):
-        raise ConfigError("ha_url must start with http:// or https://")
+    ha_url = raw["ha_url"].strip().rstrip("/")
+    parts = urlsplit(ha_url)
+    try:
+        parts.port  # raises ValueError for a malformed port
+    except ValueError:
+        parts = None
+    if not parts or parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ConfigError("ha_url must be an http:// or https:// URL with a host, "
+                          "e.g. https://homeassistant.local:8123")
+    if parts.query or parts.fragment:
+        raise ConfigError("ha_url must not contain a query string or #fragment")
 
     tiles = raw.get("tiles", [])
     if not isinstance(tiles, list):
         raise ConfigError("tiles must be a list")
+    seen = set()
     for i, tile in enumerate(tiles):
         if isinstance(tile, str):
             tiles[i] = tile = {"entity": tile}
         entity = tile.get("entity") if isinstance(tile, dict) else None
         if not isinstance(entity, str) or "." not in entity:
             raise ConfigError(f"tiles[{i}] needs an 'entity' like 'light.kitchen'")
+        if entity in seen:
+            raise ConfigError(f"tiles[{i}]: {entity} is listed more than once")
+        seen.add(entity)
 
     return {
         "haUrl": ha_url,

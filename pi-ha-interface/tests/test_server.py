@@ -56,6 +56,21 @@ class LoadConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(server.ConfigError, "http"):
             server.load_config(path)
 
+    def test_malformed_urls(self):
+        for url in ("http://", "https://?x", "https://:8123", "http://h:notaport",
+                    "ws://h:8123", "http://h:8123/?a=1", "http://h:8123/#x"):
+            with self.subTest(url=url):
+                with self.assertRaisesRegex(server.ConfigError, "ha_url"):
+                    server.load_config(write_config({"ha_url": url, "token": "x"}))
+        cfg = server.load_config(write_config({"ha_url": " https://[::1]:8123/ ", "token": "x"}))
+        self.assertEqual(cfg["haUrl"], "https://[::1]:8123")
+
+    def test_duplicate_entities(self):
+        path = write_config({"ha_url": "http://h", "token": "x",
+                             "tiles": ["light.a", {"entity": "light.a", "name": "Again"}]})
+        with self.assertRaisesRegex(server.ConfigError, r"tiles\[1\].*light\.a"):
+            server.load_config(path)
+
     def test_bad_tile(self):
         path = write_config({"ha_url": "http://h", "token": "x", "tiles": [{"name": "no entity"}]})
         with self.assertRaisesRegex(server.ConfigError, r"tiles\[0\]"):

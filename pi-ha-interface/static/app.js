@@ -96,13 +96,22 @@
         name: el("div", "name", tile.name || tile.entity),
         state: el("div", "state", "—"),
       };
-      root.append(parts.icon);
+      // Actionable tiles put their label in a real <button>, kept separate
+      // from inner controls such as the brightness slider (no nesting).
+      const actionable = isActionable(domain);
+      const body = actionable ? el("button", "tile-main") : root;
+      if (actionable) {
+        body.type = "button";
+        parts.main = body;
+        root.append(body);
+      }
+      body.append(parts.icon);
 
       if (domain === "sensor") {
         parts.value = el("div", "value", "—");
-        root.append(parts.value);
+        body.append(parts.value);
       }
-      root.append(parts.name, parts.state);
+      body.append(parts.name, parts.state);
 
       if (domain === "light") {
         parts.slider = el("input");
@@ -134,16 +143,11 @@
         root.append(row);
       }
 
-      if (isActionable(domain)) {
+      if (actionable) {
         root.classList.add("actionable");
-        root.setAttribute("role", "button");
-        root.tabIndex = 0;
+        // Taps anywhere on the card toggle; the inner button's keyboard
+        // activation bubbles here too. Inner controls stop propagation.
         root.addEventListener("click", () => onTap(tile, root));
-        root.addEventListener("keydown", (e) => {
-          // Ignore keys from inner controls (e.g. the brightness slider).
-          if (e.target !== root) return;
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onTap(tile, root); }
-        });
       }
 
       tiles.set(tile.entity, { tile, el: root, parts });
@@ -196,8 +200,8 @@
     root.classList.remove("pending");
     root.classList.toggle("unavailable", unavailable);
     root.classList.toggle("on", !!s && ON_STATES.has(s.state));
-    if (TOGGLE_DOMAINS.has(tile.entity.split(".")[0])) {
-      root.setAttribute("aria-pressed", String(!!s && ON_STATES.has(s.state)));
+    if (parts.main && TOGGLE_DOMAINS.has(domain)) {
+      parts.main.setAttribute("aria-pressed", String(!!s && ON_STATES.has(s.state)));
     }
 
     if (!tile.name && s && s.attributes.friendly_name) parts.name.textContent = s.attributes.friendly_name;
@@ -339,7 +343,14 @@
   function connect() {
     const url = cfg.haUrl.replace(/^http/, "ws") + "/api/websocket";
     setConn("connecting", "Connecting…");
-    ws = new WebSocket(url);
+    try {
+      ws = new WebSocket(url);
+    } catch (err) {
+      // A URL the browser rejects won't get better by retrying.
+      showError("Cannot connect to " + cfg.haUrl + ": " + err.message);
+      setConn("down", "Invalid Home Assistant URL");
+      return;
+    }
 
     ws.onmessage = (ev) => {
       let msg;
