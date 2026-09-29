@@ -157,6 +157,12 @@ class HandlerTests(unittest.TestCase):
         with self.get(f"http://[::1]:{port}/config.json", **{"Sec-Fetch-Site": "same-origin"}) as r:
             self.assertEqual(json.load(r)["token"], "t")
 
+    def test_env_port(self):
+        from unittest import mock
+        for value, expected in (("9090", 9090), ("", 8080), ("abc", 8080), ("70000", 8080), (" 81 ", 81)):
+            with self.subTest(value=value), mock.patch.dict(server.os.environ, {"HA_DASH_PORT": value}):
+                self.assertEqual(server._env_port(), expected)
+
     def test_host_name(self):
         self.assertEqual(server._host_name("127.0.0.1:8080"), "127.0.0.1")
         self.assertEqual(server._host_name("[::1]:8080"), "::1")

@@ -34,6 +34,8 @@ GROUPS_FILE="$INSTALL_DIR/.kiosk-groups"
 
 echo "==> Installing to $INSTALL_DIR (service user: $RUN_USER)"
 mkdir -p "$INSTALL_DIR"
+# Replace static/ wholesale so files removed upstream aren't served anymore.
+rm -rf "$INSTALL_DIR/static"
 cp -r "$SRC_DIR/server.py" "$SRC_DIR/kiosk.sh" "$SRC_DIR/static" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/server.py" "$INSTALL_DIR/kiosk.sh"
 
@@ -68,12 +70,17 @@ if [ "$KIOSK" -eq 1 ]; then
   fi
   # Give the user access to the display, input and GPU devices. Record the
   # groups the user wasn't already in, so --no-kiosk removes only those.
+  # Skip groups this system doesn't have (e.g. no "render" without mesa).
   for g in video render input tty; do
+    if ! getent group "$g" >/dev/null; then
+      echo "==> Group '$g' does not exist here, skipping"
+      continue
+    fi
     if ! id -nG "$RUN_USER" | tr ' ' '\n' | grep -qx "$g"; then
       echo "$RUN_USER $g" >> "$GROUPS_FILE"
+      usermod -aG "$g" "$RUN_USER"
     fi
   done
-  usermod -aG video,render,input,tty "$RUN_USER"
 
   install_unit ha-kiosk.service
   systemctl daemon-reload

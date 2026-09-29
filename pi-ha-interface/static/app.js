@@ -75,8 +75,11 @@
     const now = new Date();
     $("clock").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
-  tickClock();
-  setInterval(tickClock, 10000);
+  // Re-render just after each minute boundary so the clock never lags.
+  (function scheduleClock() {
+    tickClock();
+    setTimeout(scheduleClock, 60000 - (Date.now() % 60000) + 50);
+  })();
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -235,6 +238,16 @@
   /* ---------- Actions ---------- */
 
   const confirmations = new WeakMap(); // tile element -> { timer, service }
+
+  function cancelConfirm(root) {
+    const c = confirmations.get(root);
+    if (!c) return;
+    clearTimeout(c.timer);
+    confirmations.delete(root);
+    root.classList.remove("confirm");
+    // Don't leave a "Tap again to ..." prompt up for an action that's gone.
+    if ($("toast").textContent.startsWith("Tap again")) toast("");
+  }
   // Tiles with a service call awaiting HA's reply. Kept apart from the
   // "pending" class, which render() clears on any state update.
   const inFlight = new WeakSet();
@@ -371,6 +384,12 @@
     ws.onclose = () => {
       for (const p of pending.values()) p.reject(new Error("connection lost"));
       pending.clear();
+      // Anything shown now may be stale: mark every tile unavailable (and
+      // drop pending lock/cover confirmations) until a fresh snapshot lands,
+      // so nothing acts on a state that changed while we were disconnected.
+      states.clear();
+      for (const t of tiles.values()) cancelConfirm(t.el);
+      renderAll();
       // Retrying a rejected token can't succeed; reload the page after fixing it.
       if (authFailed) return;
       setConn("down", "Disconnected — retrying");

@@ -146,6 +146,14 @@ def make_handler(config_path, loopback_only=True):
     return Handler
 
 
+def _env_port(default=8080):
+    """HA_DASH_PORT if it is a valid port number, else the default."""
+    value = os.environ.get("HA_DASH_PORT", "").strip()
+    if value.isdigit() and 0 < int(value) < 65536:
+        return int(value)
+    return default
+
+
 def make_server(host, port, handler):
     """Create the HTTP server, using an IPv6 socket for IPv6 hosts such as ::1."""
     class Server(ThreadingHTTPServer):
@@ -157,7 +165,7 @@ def make_server(host, port, handler):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--host", default=os.environ.get("HA_DASH_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("HA_DASH_PORT", "8080")))
+    parser.add_argument("--port", type=int, default=_env_port())
     parser.add_argument("--config", default=os.environ.get("HA_DASH_CONFIG", str(DEFAULT_CONFIG)))
     args = parser.parse_args(argv)
 
