@@ -6,8 +6,9 @@
   --muted: #6b6f78;
   /* Dark enough for 3:1+ focus/outline contrast on the light backgrounds. */
   --accent: #b45309;
-  --ok: #2eb872;
-  --warn: #e0a800;
+  /* Status dot colours: 3:1+ against the page background in both themes. */
+  --ok: #178a56;
+  --warn: #a9821a;
   /* 5.3:1 with white error text; 3:1+ as the status dot in both themes. */
   --bad: #cd2b31;
   --radius: 16px;
@@ -138,12 +139,18 @@ h1 { margin: 0; font-size: 1.4rem; font-weight: 600; }
 }
 
 .error, .toast {
-  position: fixed;
-  left: 16px; right: 16px; bottom: 16px;
   padding: 12px 16px;
   border-radius: 12px;
   color: #fff;
 }
-.error { background: var(--bad); }
-.toast { background: rgba(0, 0, 0, 0.8); text-align: center; pointer-events: none; }
-.error:empty, .toast:empty { padding: 0; background: transparent; }
+/* The error sits in the page flow under the header, so a toast can never
+   cover it. */
+.error { background: var(--bad); margin: 4px 16px 0; }
+.toast {
+  position: fixed;
+  left: 16px; right: 16px; bottom: 16px;
+  background: rgba(0, 0, 0, 0.8);
+  text-align: center;
+  pointer-events: none;
+}
+.error:empty, .toast:empty { padding: 0; margin: 0; background: transparent; }

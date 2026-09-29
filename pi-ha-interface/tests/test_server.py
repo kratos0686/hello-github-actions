@@ -64,6 +64,8 @@ class LoadConfigTests(unittest.TestCase):
                     server.load_config(write_config({"ha_url": url, "token": "x"}))
         cfg = server.load_config(write_config({"ha_url": " https://[::1]:8123/ ", "token": "x"}))
         self.assertEqual(cfg["haUrl"], "https://[::1]:8123")
+        cfg = server.load_config(write_config({"ha_url": "HTTPS://ha.local:8123", "token": "x"}))
+        self.assertEqual(cfg["haUrl"], "https://ha.local:8123")
 
     def test_duplicate_entities(self):
         path = write_config({"ha_url": "http://h", "token": "x",

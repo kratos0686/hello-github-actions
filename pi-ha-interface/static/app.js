@@ -318,7 +318,9 @@
     let next = s.attributes.temperature + dir * step;
     if (s.attributes.min_temp != null) next = Math.max(s.attributes.min_temp, next);
     if (s.attributes.max_temp != null) next = Math.min(s.attributes.max_temp, next);
-    next = Math.round(next * 10) / 10;
+    // Strip float noise (20.1 + 0.2 = 20.300000000000001) while keeping
+    // steps finer than 0.1, e.g. target_temp_step 0.25.
+    next = Number(next.toPrecision(12));
     // Optimistic update so repeated taps accumulate before HA echoes back.
     // A state update from HA replaces `s`, so the confirmed value is the one
     // this object held before its first optimistic change.
@@ -364,7 +366,7 @@
   }
 
   function connect() {
-    const url = cfg.haUrl.replace(/^http/, "ws") + "/api/websocket";
+    const url = cfg.haUrl.replace(/^http/i, "ws") + "/api/websocket";
     setConn("connecting", "Connecting…");
     try {
       ws = new WebSocket(url);

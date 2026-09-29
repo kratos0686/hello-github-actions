@@ -66,6 +66,9 @@ def load_config(path):
                           "e.g. https://homeassistant.local:8123")
     if parts.query or parts.fragment:
         raise ConfigError("ha_url must not contain a query string or #fragment")
+    # urlsplit lowercases the scheme; do the same so the page's
+    # http(s) -> ws(s) rewrite works for e.g. "HTTPS://".
+    ha_url = parts.scheme + ha_url[len(parts.scheme):]
 
     tiles = raw.get("tiles", [])
     if not isinstance(tiles, list):
@@ -149,8 +152,11 @@ def make_handler(config_path, loopback_only=True):
 def _env_port(default=8080):
     """HA_DASH_PORT if it is a valid port number, else the default."""
     value = os.environ.get("HA_DASH_PORT", "").strip()
+    if not value:
+        return default
     if value.isdigit() and 0 < int(value) < 65536:
         return int(value)
+    print(f"warning: ignoring invalid HA_DASH_PORT={value!r}, using {default}", file=sys.stderr)
     return default
 
 
