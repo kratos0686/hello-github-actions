@@ -28,8 +28,13 @@ if ! id "$RUN_USER" >/dev/null 2>&1; then
   echo "user '$RUN_USER' does not exist" >&2
   exit 1
 fi
-SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 INSTALL_DIR="/opt/ha-dashboard"
+# Installing onto itself would delete static/ before copying it.
+if [ -d "$INSTALL_DIR" ] && [ "$SRC_DIR" = "$(cd "$INSTALL_DIR" && pwd -P)" ]; then
+  echo "run install.sh from the source checkout, not from $INSTALL_DIR" >&2
+  exit 1
+fi
 GROUPS_FILE="$INSTALL_DIR/.kiosk-groups"
 
 echo "==> Installing to $INSTALL_DIR (service user: $RUN_USER)"
