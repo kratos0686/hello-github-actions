@@ -30,6 +30,7 @@ if ! id "$RUN_USER" >/dev/null 2>&1; then
 fi
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTALL_DIR="/opt/ha-dashboard"
+GROUPS_FILE="$INSTALL_DIR/.kiosk-groups"
 
 echo "==> Installing to $INSTALL_DIR (service user: $RUN_USER)"
 mkdir -p "$INSTALL_DIR"
@@ -65,14 +66,22 @@ if [ "$KIOSK" -eq 1 ]; then
     apt-get install -y --no-install-recommends chromium || \
       apt-get install -y --no-install-recommends chromium-browser
   fi
-  # Give the user access to the display, input and GPU devices.
+  # Give the user access to the display, input and GPU devices. Record the
+  # groups the user wasn't already in, so --no-kiosk removes only those.
+  for g in video render input tty; do
+    if ! id -nG "$RUN_USER" | tr ' ' '\n' | grep -qx "$g"; then
+      echo "$RUN_USER $g" >> "$GROUPS_FILE"
+    fi
+  done
   usermod -aG video,render,input,tty "$RUN_USER"
 
   install_unit ha-kiosk.service
   systemctl daemon-reload
+  # Enable the kiosk before taking tty1 away, so a failure here can't leave
+  # the Pi booting to a blank console.
+  systemctl enable ha-kiosk.service
   systemctl set-default graphical.target
   systemctl disable getty@tty1.service || true
-  systemctl enable ha-kiosk.service
   if systemctl is-active --quiet ha-kiosk.service; then
     # Already running from an earlier install: reload the new files now.
     systemctl restart ha-kiosk.service
@@ -89,6 +98,12 @@ elif [ -f /etc/systemd/system/ha-kiosk.service ]; then
   systemctl enable getty@tty1.service || true
   systemctl start getty@tty1.service || true
   systemctl set-default multi-user.target
+  if [ -f "$GROUPS_FILE" ]; then
+    while read -r user group; do
+      gpasswd -d "$user" "$group" >/dev/null 2>&1 || true
+    done < "$GROUPS_FILE"
+    rm -f "$GROUPS_FILE"
+  fi
 fi
 
 echo "==> Done. Dashboard: http://127.0.0.1:8080/ (logs: journalctl -u ha-dashboard -f)"
