@@ -245,6 +245,9 @@
       toast("Unavailable");
       return;
     }
+    // A second tap before HA answers would send a second toggle and could
+    // flip the entity straight back.
+    if (root.classList.contains("pending")) return;
 
     let service = serviceFor(domain, s.state);
     if (CONFIRM_DOMAINS.has(domain)) {
