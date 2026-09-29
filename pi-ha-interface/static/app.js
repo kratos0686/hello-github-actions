@@ -235,6 +235,9 @@
   /* ---------- Actions ---------- */
 
   const confirmations = new WeakMap(); // tile element -> { timer, service }
+  // Tiles with a service call awaiting HA's reply. Kept apart from the
+  // "pending" class, which render() clears on any state update.
+  const inFlight = new WeakSet();
 
   function onTap(tile, root) {
     const entityId = tile.entity;
@@ -247,7 +250,7 @@
     }
     // A second tap before HA answers would send a second toggle and could
     // flip the entity straight back.
-    if (root.classList.contains("pending")) return;
+    if (inFlight.has(root)) return;
 
     let service = serviceFor(domain, s.state);
     if (CONFIRM_DOMAINS.has(domain)) {
@@ -269,11 +272,15 @@
       root.classList.remove("confirm");
     }
     root.classList.add("pending");
+    inFlight.add(root);
     callService(domain, service, entityId).then(() => {
       if (domain === "scene" || domain === "button") {
         toast((tile.name || s.attributes.friendly_name || entityId) + " ✓");
       }
-    }, () => {}).finally(() => root.classList.remove("pending"));
+    }, () => {}).finally(() => {
+      inFlight.delete(root);
+      root.classList.remove("pending");
+    });
   }
 
   function serviceFor(domain, state) {
