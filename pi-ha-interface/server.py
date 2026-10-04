@@ -66,6 +66,10 @@ def load_config(path):
                           "e.g. https://homeassistant.local:8123")
     if parts.query or parts.fragment:
         raise ConfigError("ha_url must not contain a query string or #fragment")
+    # Browsers refuse WebSocket URLs with credentials, so the page could
+    # never connect; the access token is what authenticates anyway.
+    if "@" in parts.netloc:
+        raise ConfigError("ha_url must not contain a username or password")
     # urlsplit lowercases the scheme; do the same so the page's
     # http(s) -> ws(s) rewrite works for e.g. "HTTPS://".
     ha_url = parts.scheme + ha_url[len(parts.scheme):]
