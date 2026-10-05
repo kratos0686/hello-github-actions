@@ -78,8 +78,12 @@ page. On the kiosk you can do that with `sudo systemctl restart ha-kiosk`.
 - **Using a tablet or phone instead of a screen on the Pi**: edit
   `/etc/systemd/system/ha-dashboard.service`, change `--host 127.0.0.1` to
   `--host 0.0.0.0`, then run `sudo systemctl daemon-reload && sudo systemctl
-  restart ha-dashboard` and open `http://<pi-address>:8080/`. Be aware that this
-  exposes the access token to anyone on your network who can reach the port.
+  restart ha-dashboard` and open `http://<pi-ip-address>:8080/`. To use a name
+  such as `raspberrypi.local` instead of the IP address, also add
+  `--allowed-host raspberrypi.local`; the token is only handed out to the IP
+  address, `localhost`, and names listed this way, which blocks DNS-rebinding
+  attacks from other websites. Be aware that this mode still exposes the
+  access token to anyone on your network who can reach the port.
 
 ## Troubleshooting
 

@@ -412,7 +412,6 @@
         setConn("down", "Auth failed");
         return;
       case "auth_ok":
-        retryDelay = 1000;
         showError("");
         setConn("ok", "Connected to Home Assistant " + (msg.ha_version || ""));
         onAuthenticated();
@@ -438,6 +437,7 @@
   }
 
   async function onAuthenticated() {
+    const sock = ws;
     try {
       // Subscribe first so no change slips between the snapshot and the stream.
       await send({ type: "subscribe_events", event_type: "state_changed" });
@@ -454,8 +454,14 @@
       renderAll();
       const missing = [...tiles.keys()].filter((id) => !states.has(id));
       if (missing.length) toast("Not found in HA: " + missing.join(", "));
+      // Only a fully loaded dashboard resets the backoff, so a server that
+      // keeps failing these requests isn't hammered every second.
+      retryDelay = 1000;
     } catch (err) {
       showError("Failed to load states: " + err.message);
+      // Start over on a fresh connection (new subscription, new snapshot)
+      // via the normal reconnect path instead of sitting half-initialized.
+      if (sock.readyState === WebSocket.OPEN) sock.close();
     } finally {
       eventsDuringSnapshot = null;
     }

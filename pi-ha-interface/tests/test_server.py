@@ -111,8 +111,8 @@ class LoadConfigTests(unittest.TestCase):
 
 
 class HandlerTests(unittest.TestCase):
-    def serve(self, config_path):
-        httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(config_path))
+    def serve(self, config_path, extra_hosts=()):
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(config_path, extra_hosts))
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         self.addCleanup(httpd.server_close)
         self.addCleanup(httpd.shutdown)
@@ -145,6 +145,22 @@ class HandlerTests(unittest.TestCase):
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
                     self.get(base + "/config.json", **headers)
                 self.assertEqual(ctx.exception.code, 403)
+
+    def test_config_host_check(self):
+        base = self.serve(write_config({"ha_url": "http://h:8123", "token": "tok"}),
+                          extra_hosts=["RaspberryPi.local"])
+        # IP literals and listed hostnames are served; other names are not.
+        for host, ok in (("192.168.1.5:8080", True), ("[fe80::1]:8080", True),
+                         ("raspberrypi.local:8080", True), ("localhost", True),
+                         ("raspberrypi.attacker.example", False), ("", False)):
+            with self.subTest(host=host):
+                if ok:
+                    with self.get(base + "/config.json", Host=host) as r:
+                        self.assertEqual(json.load(r)["token"], "tok")
+                else:
+                    with self.assertRaises(urllib.error.HTTPError) as ctx:
+                        self.get(base + "/config.json", Host=host)
+                    self.assertEqual(ctx.exception.code, 403)
 
     def test_ipv6_loopback(self):
         try:

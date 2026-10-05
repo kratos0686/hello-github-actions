@@ -11,6 +11,7 @@ web pages open in that browser cannot load it cross-origin.
 """
 
 import argparse
+import ipaddress
 import json
 import os
 import socket
@@ -105,7 +106,26 @@ def _host_name(host_header):
     return host.rsplit(":", 1)[0] if host.count(":") == 1 else host
 
 
-def make_handler(config_path, loopback_only=True):
+def _host_allowed(host_header, extra_hosts=()):
+    """Whether a Host header may receive the token.
+
+    A DNS-rebinding page reaches us under the attacker's own hostname, so only
+    loopback names, IP literals (which no other site can serve a page from)
+    and hostnames the user listed explicitly are accepted.
+    """
+    host = _host_name(host_header)
+    if host in LOOPBACK_HOSTS or host in extra_hosts:
+        return True
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
+def make_handler(config_path, extra_hosts=()):
+    extra_hosts = {h.strip().lower() for h in extra_hosts if h.strip()}
+
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -120,8 +140,7 @@ def make_handler(config_path, loopback_only=True):
             # page from another site can't pull the token.
             if self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
                 return False
-            # A DNS-rebinding page would reach us under its own hostname.
-            if loopback_only and _host_name(self.headers.get("Host")) not in LOOPBACK_HOSTS:
+            if not _host_allowed(self.headers.get("Host"), extra_hosts):
                 return False
             return True
 
@@ -177,6 +196,11 @@ def main(argv=None):
     parser.add_argument("--host", default=os.environ.get("HA_DASH_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=_env_port())
     parser.add_argument("--config", default=os.environ.get("HA_DASH_CONFIG", str(DEFAULT_CONFIG)))
+    parser.add_argument(
+        "--allowed-host", action="append", dest="allowed_hosts",
+        default=[h for h in os.environ.get("HA_DASH_ALLOWED_HOSTS", "").split(",") if h.strip()],
+        help="extra hostname (e.g. raspberrypi.local) a browser may use to reach the "
+             "dashboard; IP addresses and localhost are always allowed. Repeatable.")
     args = parser.parse_args(argv)
 
     try:
@@ -184,15 +208,14 @@ def main(argv=None):
     except ConfigError as e:
         print(f"warning: {e}", file=sys.stderr)
 
-    loopback_only = args.host in LOOPBACK_HOSTS
-    if not loopback_only:
+    if args.host not in LOOPBACK_HOSTS:
         print(
             "warning: listening on a non-loopback address exposes your Home Assistant "
             "token to anyone who can reach this port",
             file=sys.stderr,
         )
 
-    server = make_server(args.host, args.port, make_handler(args.config, loopback_only))
+    server = make_server(args.host, args.port, make_handler(args.config, args.allowed_hosts))
     shown = f"[{args.host}]" if ":" in args.host else args.host
     print(f"HA dashboard on http://{shown}:{args.port}/", file=sys.stderr)
     try:
